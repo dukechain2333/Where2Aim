@@ -68,13 +68,26 @@ struct ScopeView: View {
             .gesture(
                 MagnificationGesture()
                     .onChanged { scale in
-                        cameraController.setZoom(zoomAtGestureStart * scale)
+                        let viewHeight = geometry.size.height - bottomGap
+                        cameraController.setZoom(zoomAtGestureStart * scale,
+                                                 max: maxZoom(for: viewHeight))
                     }
-                    .onEnded { scale in
+                    .onEnded { _ in
                         zoomAtGestureStart = cameraController.zoomFactor
                     }
             )
         }
+    }
+
+    /// Returns the zoom factor at which the 50 yd ranging line would exactly reach
+    /// the top edge of the camera frame, accounting for the reticle's top spacer and label.
+    private func maxZoom(for viewHeight: CGFloat) -> CGFloat {
+        let vFOVRad = cameraController.cameraFOVDegrees * .pi / 180.0
+        let fraction50yd = 1.7526 / (50.0 * 0.9144 * 2.0 * tan(vFOVRad / 2.0))
+        // Subtract the 14 % top spacer and the 28 pt label from the available line height.
+        let availableLineHeight = viewHeight * 0.86 - 28
+        guard fraction50yd * viewHeight > 0 else { return 2.0 }
+        return max(2.0, availableLineHeight / (fraction50yd * viewHeight))
     }
 
     private var permissionPrompt: some View {
@@ -292,12 +305,13 @@ private final class ScopeCameraController: ObservableObject, @unchecked Sendable
     private var shouldRunSession = false
     private var captureDevice: AVCaptureDevice?
 
-    func setZoom(_ factor: CGFloat) {
+    func setZoom(_ factor: CGFloat, max visualMax: CGFloat = .infinity) {
         sessionQueue.async { [weak self] in
             guard let self, let device = self.captureDevice else { return }
             do {
                 try device.lockForConfiguration()
-                let clamped = max(1.0, min(factor, device.activeFormat.videoMaxZoomFactor))
+                let hardwareMax = device.activeFormat.videoMaxZoomFactor
+                let clamped = max(1.0, min(factor, min(hardwareMax, visualMax)))
                 device.videoZoomFactor = clamped
                 device.unlockForConfiguration()
                 DispatchQueue.main.async { self.zoomFactor = clamped }
