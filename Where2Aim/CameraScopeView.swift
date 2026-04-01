@@ -56,7 +56,7 @@ struct ScopeView: View {
                             .stroke(Color.white.opacity(0.14), lineWidth: 1)
                     )
 
-                ScopeReticleOverlay()
+                ScopeReticleOverlay(cameraFOVDegrees: cameraController.cameraFOVDegrees)
                     .allowsHitTesting(false)
             }
             .frame(width: geometry.size.width, height: max(0, geometry.size.height - bottomGap))
@@ -121,41 +121,50 @@ struct ScopeView: View {
 }
 
 private struct ScopeReticleOverlay: View {
-    private let rangingMarks: [(distance: Int, lineHeightRatio: CGFloat)] = [
-        (50, 1.0),
-        (100, 0.5),
-        (150, 1.0 / 3.0),
-        (200, 0.25),
-        (250, 0.2),
-        (300, 1.0 / 6.0)
-    ]
+    /// Horizontal FOV of the camera sensor in degrees.
+    /// In portrait mode with resizeAspectFill the sensor's horizontal axis maps to the
+    /// screen's vertical axis, so this value is also the effective vertical FOV of the display.
+    let cameraFOVDegrees: Double
+
+    private let distances: [Int] = [50, 100, 150, 200, 250, 300]
+    /// Height of a 5′9″ person in metres.
+    private let personHeightM: Double = 1.7526
+    private let yardsToMeters: Double = 0.9144
     private let reticleWidth: CGFloat = 320
-    private let reticleLineHeight: CGFloat = 240
+
+    /// Returns the on-screen height (in points) that a 5′9″ person would appear at
+    /// `distanceYards` yards, given the current screen height and camera vertical FOV.
+    private func lineHeight(for distanceYards: Int, screenHeight: CGFloat) -> CGFloat {
+        let vFOVRad = cameraFOVDegrees * .pi / 180.0
+        let distanceM = Double(distanceYards) * yardsToMeters
+        let fraction = personHeightM / (distanceM * 2.0 * tan(vFOVRad / 2.0))
+        return max(4, CGFloat(fraction) * screenHeight)
+    }
 
     var body: some View {
         GeometryReader { geometry in
             let size = geometry.size
             let availableWidth = min(reticleWidth, max(0, size.width - 48))
-            let baseLineHeight = min(reticleLineHeight, max(0, size.height - 120))
+            let tallestLine = lineHeight(for: distances[0], screenHeight: size.height)
 
             VStack {
                 Spacer(minLength: size.height * 0.14)
 
                 HStack(alignment: .center, spacing: 0) {
-                    ForEach(Array(rangingMarks.enumerated()), id: \.offset) { _, mark in
+                    ForEach(distances, id: \.self) { distance in
                         VStack(spacing: 10) {
                             Spacer(minLength: 0)
 
                             Capsule()
                                 .fill(Color(red: 0.86, green: 0.13, blue: 0.13).opacity(0.92))
-                                .frame(width: 3, height: baseLineHeight * mark.lineHeightRatio)
+                                .frame(width: 3, height: lineHeight(for: distance, screenHeight: size.height))
                                 .shadow(color: .black.opacity(0.45), radius: 6, x: 0, y: 0)
 
-                            Text("\(mark.distance)")
+                            Text("\(distance)")
                                 .font(.caption.weight(.bold))
                                 .foregroundStyle(.white.opacity(0.9))
                         }
-                        .frame(height: baseLineHeight + 28, alignment: .bottom)
+                        .frame(height: tallestLine + 28, alignment: .bottom)
                         .frame(maxWidth: .infinity)
                     }
                 }
@@ -253,6 +262,10 @@ private final class PreviewView: UIView {
 
 private final class ScopeCameraController: ObservableObject, @unchecked Sendable {
     @Published private(set) var authorizationStatus: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
+    /// Horizontal FOV of the active camera format (degrees). Doubles as the display's
+    /// vertical FOV in portrait mode with resizeAspectFill. Defaults to 65° until the
+    /// session is configured and the real value is read from the device.
+    @Published private(set) var cameraFOVDegrees: Double = 65.0
 
     let session = AVCaptureSession()
 
@@ -385,6 +398,11 @@ private final class ScopeCameraController: ObservableObject, @unchecked Sendable
             }
 
             isConfigured = true
+
+            let fov = Double(device.activeFormat.videoFieldOfView)
+            DispatchQueue.main.async { [weak self] in
+                self?.cameraFOVDegrees = fov
+            }
         } catch {
             return
         }
