@@ -387,10 +387,11 @@ private final class ScopeCameraController: ObservableObject, @unchecked Sendable
                 device.cancelVideoZoomRamp()
             }
 
-            if device.videoZoomFactor != 1.0 {
+            let targetZoom: CGFloat = 2.0
+            if device.videoZoomFactor != targetZoom {
                 do {
                     try device.lockForConfiguration()
-                    device.videoZoomFactor = 1.0
+                    device.videoZoomFactor = min(targetZoom, device.activeFormat.videoMaxZoomFactor)
                     device.unlockForConfiguration()
                 } catch {
                     // Keep the live camera feed available even if zoom reset fails.
