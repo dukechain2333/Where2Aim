@@ -1,6 +1,6 @@
 # Where2Aim
 
-Where2Aim is an iOS SwiftUI app for shooters using a red dot sight who want a faster way to decide where to hold at common distances. Instead of only showing raw drop values, the app turns a basic ballistic estimate into a visual aiming recommendation and includes two companion tools: a field distance map and a live scope-style overlay.
+Where2Aim is an iOS SwiftUI app for shooters using a red dot sight who want a faster way to decide where to hold at common distances. Instead of only showing raw drop values, the app turns a ballistic lookup table into a visual aiming recommendation and includes two companion tools: a field distance map and a live scope-style overlay.
 
 ## What The App Does
 
@@ -34,17 +34,17 @@ The aiming recommendation uses:
 - optic height in inches
 - zero distance in yards
 
-The app estimates bullet drop using a simplified gravity-based model with a fixed muzzle velocity, then computes:
+The app uses a baked-in drop table from the provided `.223 Rem 55gr FMJ` dataset, then computes:
 
 - `impact offset`: where the round is expected to land relative to the point of aim
 - `hold offset`: how far the shooter should hold to compensate
 
-This is intentionally lightweight and fast for field reference, not a full external ballistics solver.
+The current table reflects Federal Premium `.223 Rem 55gr FMJ` data at `3,240 fps` for the supported riser, zero, and target-distance combinations. This is still a fast field-reference tool, not a full external ballistics solver.
 
 ## Current Presets
 
 - Target distance: `50`, `100`, `150`, `200`, `250`, `300` yards
-- Optic height: `1.54`, `1.70`, `1.93`, `2.04`, `2.26`, `2.33` inches
+- Optic height: `1.42`, `1.57`, `1.93`, `2.26` inches
 - Zero distance: `10`, `15`, `20`, `25`, `30` yards
 
 ## Permissions

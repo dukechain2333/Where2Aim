@@ -216,11 +216,16 @@ private enum SetupSelectionStore {
 
     static func loadLastSetup() -> SetupSelection {
         let defaults = UserDefaults.standard
-
-        return SetupSelection(
+        let normalized = Presets.normalizedSetup(
             distanceToTarget: value(forKey: distanceKey, defaults: defaults, fallback: 50.0),
             opticHeight: value(forKey: opticHeightKey, defaults: defaults, fallback: 1.93),
             zeroDistance: value(forKey: zeroDistanceKey, defaults: defaults, fallback: 25.0)
+        )
+
+        return SetupSelection(
+            distanceToTarget: normalized.distanceToTarget,
+            opticHeight: normalized.opticHeight,
+            zeroDistance: normalized.zeroDistance
         )
     }
 
