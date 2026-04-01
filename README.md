@@ -56,4 +56,4 @@ The app requests:
 
 ## License
 
-No license file is currently included in this repository.
+This project is licensed under the MIT License. See [`/Users/qianzehao/Where2Aim/LICENSE`](/Users/qianzehao/Where2Aim/LICENSE) for details.
