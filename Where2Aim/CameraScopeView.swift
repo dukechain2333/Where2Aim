@@ -56,7 +56,8 @@ struct ScopeView: View {
                             .stroke(Color.white.opacity(0.14), lineWidth: 1)
                     )
 
-                ScopeReticleOverlay(cameraFOVDegrees: cameraController.cameraFOVDegrees)
+                ScopeReticleOverlay(cameraFOVDegrees: cameraController.cameraFOVDegrees,
+                                    zoomFactor: cameraController.zoomFactor)
                     .allowsHitTesting(false)
             }
             .frame(width: geometry.size.width, height: max(0, geometry.size.height - bottomGap))
@@ -125,6 +126,9 @@ private struct ScopeReticleOverlay: View {
     /// In portrait mode with resizeAspectFill the sensor's horizontal axis maps to the
     /// screen's vertical axis, so this value is also the effective vertical FOV of the display.
     let cameraFOVDegrees: Double
+    /// Digital zoom factor applied to the camera feed. Zooming crops the sensor,
+    /// so the on-screen angular size of any object scales linearly with zoom.
+    let zoomFactor: CGFloat
 
     private let distances: [Int] = [50, 100, 150, 200, 250, 300]
     /// Height of a 5′9″ person in metres.
@@ -133,12 +137,12 @@ private struct ScopeReticleOverlay: View {
     private let reticleWidth: CGFloat = 320
 
     /// Returns the on-screen height (in points) that a 5′9″ person would appear at
-    /// `distanceYards` yards, given the current screen height and camera vertical FOV.
+    /// `distanceYards` yards, given the current screen height, camera vertical FOV, and zoom.
     private func lineHeight(for distanceYards: Int, screenHeight: CGFloat) -> CGFloat {
         let vFOVRad = cameraFOVDegrees * .pi / 180.0
         let distanceM = Double(distanceYards) * yardsToMeters
         let fraction = personHeightM / (distanceM * 2.0 * tan(vFOVRad / 2.0))
-        return max(4, CGFloat(fraction) * screenHeight)
+        return max(4, CGFloat(fraction) * screenHeight * zoomFactor)
     }
 
     var body: some View {
@@ -266,6 +270,9 @@ private final class ScopeCameraController: ObservableObject, @unchecked Sendable
     /// vertical FOV in portrait mode with resizeAspectFill. Defaults to 65° until the
     /// session is configured and the real value is read from the device.
     @Published private(set) var cameraFOVDegrees: Double = 65.0
+    /// The zoom factor applied to the camera feed. Published so the reticle overlay
+    /// can scale line heights to match the zoomed view.
+    @Published private(set) var zoomFactor: CGFloat = 2.0
 
     let session = AVCaptureSession()
 
@@ -388,10 +395,12 @@ private final class ScopeCameraController: ObservableObject, @unchecked Sendable
             }
 
             let targetZoom: CGFloat = 2.0
+            var appliedZoom: CGFloat = device.videoZoomFactor
             if device.videoZoomFactor != targetZoom {
                 do {
                     try device.lockForConfiguration()
-                    device.videoZoomFactor = min(targetZoom, device.activeFormat.videoMaxZoomFactor)
+                    appliedZoom = min(targetZoom, device.activeFormat.videoMaxZoomFactor)
+                    device.videoZoomFactor = appliedZoom
                     device.unlockForConfiguration()
                 } catch {
                     // Keep the live camera feed available even if zoom reset fails.
@@ -401,8 +410,10 @@ private final class ScopeCameraController: ObservableObject, @unchecked Sendable
             isConfigured = true
 
             let fov = Double(device.activeFormat.videoFieldOfView)
+            let zoom = appliedZoom
             DispatchQueue.main.async { [weak self] in
                 self?.cameraFOVDegrees = fov
+                self?.zoomFactor = zoom
             }
         } catch {
             return
