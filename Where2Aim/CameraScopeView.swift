@@ -45,6 +45,8 @@ struct ScopeView: View {
         }
     }
 
+    @State private var zoomAtGestureStart: CGFloat = 2.0
+
     private var liveScope: some View {
         GeometryReader { geometry in
             let bottomGap: CGFloat = 18
@@ -63,6 +65,15 @@ struct ScopeView: View {
             .frame(width: geometry.size.width, height: max(0, geometry.size.height - bottomGap))
             .frame(maxHeight: .infinity, alignment: .top)
             .background(Color.black.opacity(0.22))
+            .gesture(
+                MagnificationGesture()
+                    .onChanged { scale in
+                        cameraController.setZoom(zoomAtGestureStart * scale)
+                    }
+                    .onEnded { scale in
+                        zoomAtGestureStart = cameraController.zoomFactor
+                    }
+            )
         }
     }
 
@@ -279,6 +290,20 @@ private final class ScopeCameraController: ObservableObject, @unchecked Sendable
     private let sessionQueue = DispatchQueue(label: "scope.camera.session")
     private var isConfigured = false
     private var shouldRunSession = false
+    private var captureDevice: AVCaptureDevice?
+
+    func setZoom(_ factor: CGFloat) {
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.captureDevice else { return }
+            do {
+                try device.lockForConfiguration()
+                let clamped = max(1.0, min(factor, device.activeFormat.videoMaxZoomFactor))
+                device.videoZoomFactor = clamped
+                device.unlockForConfiguration()
+                DispatchQueue.main.async { self.zoomFactor = clamped }
+            } catch {}
+        }
+    }
 
     func refreshAuthorization() {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
@@ -389,6 +414,7 @@ private final class ScopeCameraController: ObservableObject, @unchecked Sendable
                 return
             }
             session.addInput(input)
+            captureDevice = device
 
             if device.isRampingVideoZoom {
                 device.cancelVideoZoomRamp()
